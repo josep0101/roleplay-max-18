@@ -1,4 +1,4 @@
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -11,7 +11,6 @@ interface Agent {
   name: string;
   role: string;
   company: string;
-  avatar: string;
   scenario: string;
   initials: string;
 }
@@ -22,7 +21,6 @@ const agents: Agent[] = [
     name: "Alex Dupont",
     role: "VP of Sales Operations",
     company: "CustomerCenter",
-    avatar: "/lovable-uploads/6b9e6a0f-9541-46f4-be51-4f52890a5c93.png",
     scenario: "Alex está teniendo problemas con su proveedor actual de datos. Tu objetivo es entender sus necesidades y presentar una solución que se ajuste a sus requerimientos.",
     initials: "AD"
   },
@@ -31,7 +29,6 @@ const agents: Agent[] = [
     name: "Sarah Chen",
     role: "IT Director",
     company: "TechGrowth Inc",
-    avatar: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158",
     scenario: "Sarah busca modernizar la infraestructura de su empresa. Necesita una solución escalable y segura para manejar datos sensibles.",
     initials: "SC"
   },
@@ -40,7 +37,6 @@ const agents: Agent[] = [
     name: "Michael Ross",
     role: "Operations Manager",
     company: "LogisticsPro",
-    avatar: "https://images.unsplash.com/photo-1581092795360-fd1ca04f0952",
     scenario: "Michael necesita optimizar sus procesos de logística. Está interesado en soluciones que puedan integrar múltiples fuentes de datos.",
     initials: "MR"
   },
@@ -49,9 +45,16 @@ const agents: Agent[] = [
     name: "Laura García",
     role: "Customer Success Lead",
     company: "SaaS Solutions",
-    avatar: "https://images.unsplash.com/photo-1649972904349-6e44c42644a7",
     scenario: "Laura está evaluando nuevas herramientas para su equipo de soporte. Busca mejorar los tiempos de respuesta y la satisfacción del cliente.",
     initials: "LG"
+  },
+  {
+    id: "5",
+    name: "José Martínez",
+    role: "COO",
+    company: "Snaps",
+    scenario: "José busca una solución para optimizar los procesos internos de su empresa y mejorar la comunicación entre departamentos.",
+    initials: "JM"
   }
 ];
 
@@ -89,8 +92,7 @@ const CallStart = () => {
                 <div className="flex flex-col items-center gap-6">
                   <div className="relative">
                     <Avatar className="w-32 h-32">
-                      <AvatarImage src={selectedAgent.avatar} />
-                      <AvatarFallback>{selectedAgent.initials}</AvatarFallback>
+                      <AvatarFallback className="text-2xl">{selectedAgent.initials}</AvatarFallback>
                     </Avatar>
                     <span className="absolute bottom-2 right-2 w-4 h-4 bg-green-500 rounded-full border-2 border-white" />
                   </div>
@@ -134,7 +136,6 @@ const CallStart = () => {
                     <CardContent className="p-6">
                       <div className="flex items-start gap-4">
                         <Avatar className="w-16 h-16">
-                          <AvatarImage src={agent.avatar} />
                           <AvatarFallback>{agent.initials}</AvatarFallback>
                         </Avatar>
                         <div className="flex-1">
