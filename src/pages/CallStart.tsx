@@ -88,15 +88,26 @@ const CallStart = () => {
     }
 
     try {
-      const wsUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat?agentId=${selectedAgent.elevenlabs_agent_id}`;
+      // Get the session first
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        throw new Error("No session found");
+      if (sessionError || !session) {
+        console.error("Session error:", sessionError);
+        toast({
+          title: "Error de autenticación",
+          description: "Por favor, inicia sesión para realizar llamadas.",
+          variant: "destructive",
+        });
+        return;
       }
 
+      // Construct the WebSocket URL with the agent ID
+      const wsUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat?agentId=${selectedAgent.elevenlabs_agent_id}`;
+      
+      // Create WebSocket connection
       wsRef.current = new WebSocket(wsUrl.replace('https://', 'wss://'));
       
+      // Set up WebSocket event handlers
       wsRef.current.onopen = () => {
         console.log("WebSocket connected");
         setIsCallActive(true);
@@ -107,10 +118,13 @@ const CallStart = () => {
       };
 
       wsRef.current.onmessage = (event) => {
-        const response = JSON.parse(event.data);
-        console.log("Received message:", response);
-        // Handle the response from the agent
-        // You would typically process the audio response here
+        try {
+          const response = JSON.parse(event.data);
+          console.log("Received message:", response);
+          // Handle the response from the agent
+        } catch (error) {
+          console.error("Error parsing message:", error);
+        }
       };
 
       wsRef.current.onerror = (error) => {
@@ -120,6 +134,7 @@ const CallStart = () => {
           description: "Ha ocurrido un error en la conexión",
           variant: "destructive",
         });
+        endCall();
       };
 
       wsRef.current.onclose = () => {
@@ -143,6 +158,7 @@ const CallStart = () => {
   const endCall = () => {
     if (wsRef.current) {
       wsRef.current.close();
+      setIsCallActive(false);
     }
   };
 
@@ -150,6 +166,8 @@ const CallStart = () => {
     setIsMuted(!isMuted);
     // Implement microphone muting logic here
   };
+
+  // ... keep existing code (JSX rendering)
 
   return (
     <div className="flex h-screen bg-accent">
