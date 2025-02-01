@@ -102,10 +102,14 @@ const CallStart = () => {
       }
 
       // Construct the WebSocket URL with the agent ID
-      const wsUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat?agentId=${selectedAgent.elevenlabs_agent_id}`;
+      const baseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const wsUrl = `${baseUrl}/functions/v1/chat?agentId=${selectedAgent.elevenlabs_agent_id}`;
+      const wsUrlWithProtocol = wsUrl.replace('https://', 'wss://');
+      
+      console.log('Connecting to WebSocket URL:', wsUrlWithProtocol);
       
       // Create WebSocket connection
-      wsRef.current = new WebSocket(wsUrl.replace('https://', 'wss://'));
+      wsRef.current = new WebSocket(wsUrlWithProtocol);
       
       // Set up WebSocket event handlers
       wsRef.current.onopen = () => {
