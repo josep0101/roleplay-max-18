@@ -3,8 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sidebar } from "@/components/Sidebar";
-import { Phone, Video, Settings, ArrowLeft } from "lucide-react";
-import { useState } from "react";
+import { Phone, Video, Settings, ArrowLeft, Mic, MicOff } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/components/ui/use-toast";
 
 interface Agent {
   id: string;
@@ -13,6 +15,7 @@ interface Agent {
   company: string;
   scenario: string;
   initials: string;
+  elevenlabs_agent_id?: string;
 }
 
 const agents: Agent[] = [
@@ -54,12 +57,99 @@ const agents: Agent[] = [
     role: "COO",
     company: "Snaps",
     scenario: "José busca una solución para optimizar los procesos internos de su empresa y mejorar la comunicación entre departamentos.",
-    initials: "JM"
+    initials: "JM",
+    elevenlabs_agent_id: "tT9mhGJdnZVWHGHHQMZ4"
   }
 ];
 
 const CallStart = () => {
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
+  const [isCallActive, setIsCallActive] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const wsRef = useRef<WebSocket | null>(null);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, []);
+
+  const startCall = async () => {
+    if (!selectedAgent?.elevenlabs_agent_id) {
+      toast({
+        title: "Error",
+        description: "Este agente no está configurado para llamadas de voz.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const wsUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat?agentId=${selectedAgent.elevenlabs_agent_id}`;
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error("No session found");
+      }
+
+      wsRef.current = new WebSocket(wsUrl.replace('https://', 'wss://'));
+      
+      wsRef.current.onopen = () => {
+        console.log("WebSocket connected");
+        setIsCallActive(true);
+        toast({
+          title: "Llamada iniciada",
+          description: `Conectado con ${selectedAgent.name}`,
+        });
+      };
+
+      wsRef.current.onmessage = (event) => {
+        const response = JSON.parse(event.data);
+        console.log("Received message:", response);
+        // Handle the response from the agent
+        // You would typically process the audio response here
+      };
+
+      wsRef.current.onerror = (error) => {
+        console.error("WebSocket error:", error);
+        toast({
+          title: "Error en la llamada",
+          description: "Ha ocurrido un error en la conexión",
+          variant: "destructive",
+        });
+      };
+
+      wsRef.current.onclose = () => {
+        console.log("WebSocket closed");
+        setIsCallActive(false);
+        toast({
+          title: "Llamada finalizada",
+          description: "La conexión ha sido cerrada",
+        });
+      };
+    } catch (error) {
+      console.error("Error starting call:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo iniciar la llamada",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const endCall = () => {
+    if (wsRef.current) {
+      wsRef.current.close();
+    }
+  };
+
+  const toggleMute = () => {
+    setIsMuted(!isMuted);
+    // Implement microphone muting logic here
+  };
 
   return (
     <div className="flex h-screen bg-accent">
@@ -72,7 +162,12 @@ const CallStart = () => {
                 <Button 
                   variant="ghost" 
                   size="icon"
-                  onClick={() => setSelectedAgent(null)}
+                  onClick={() => {
+                    if (isCallActive) {
+                      endCall();
+                    }
+                    setSelectedAgent(null);
+                  }}
                 >
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
@@ -112,14 +207,51 @@ const CallStart = () => {
                   </div>
 
                   <div className="flex gap-4 mt-4">
-                    <Button className="gap-2" size="lg">
-                      <Phone className="h-4 w-4" />
-                      Iniciar Llamada
-                    </Button>
-                    <Button variant="secondary" className="gap-2" size="lg">
-                      <Video className="h-4 w-4" />
-                      Iniciar Videollamada
-                    </Button>
+                    {isCallActive ? (
+                      <>
+                        <Button 
+                          variant="destructive" 
+                          className="gap-2" 
+                          size="lg"
+                          onClick={endCall}
+                        >
+                          <Phone className="h-4 w-4" />
+                          Finalizar Llamada
+                        </Button>
+                        <Button
+                          variant={isMuted ? "secondary" : "outline"}
+                          className="gap-2"
+                          size="lg"
+                          onClick={toggleMute}
+                        >
+                          {isMuted ? (
+                            <MicOff className="h-4 w-4" />
+                          ) : (
+                            <Mic className="h-4 w-4" />
+                          )}
+                          {isMuted ? "Activar Micrófono" : "Silenciar"}
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button 
+                          className="gap-2" 
+                          size="lg"
+                          onClick={startCall}
+                        >
+                          <Phone className="h-4 w-4" />
+                          Iniciar Llamada
+                        </Button>
+                        <Button 
+                          variant="secondary" 
+                          className="gap-2" 
+                          size="lg"
+                        >
+                          <Video className="h-4 w-4" />
+                          Iniciar Videollamada
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               </CardContent>

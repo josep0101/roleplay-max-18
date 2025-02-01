@@ -514,6 +514,12 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_elevenlabs_key: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          secret: string
+        }[]
+      }
       secrets: {
         Args: {
           secret_name: string
