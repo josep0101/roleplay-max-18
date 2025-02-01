@@ -31,7 +31,7 @@ const agents: Agent[] = [
     name: "Sarah Chen",
     role: "IT Director",
     company: "TechGrowth Inc",
-    avatar: "",
+    avatar: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158",
     scenario: "Sarah busca modernizar la infraestructura de su empresa. Necesita una solución escalable y segura para manejar datos sensibles.",
     initials: "SC"
   },
@@ -40,7 +40,7 @@ const agents: Agent[] = [
     name: "Michael Ross",
     role: "Operations Manager",
     company: "LogisticsPro",
-    avatar: "",
+    avatar: "https://images.unsplash.com/photo-1581092795360-fd1ca04f0952",
     scenario: "Michael necesita optimizar sus procesos de logística. Está interesado en soluciones que puedan integrar múltiples fuentes de datos.",
     initials: "MR"
   },
@@ -49,7 +49,7 @@ const agents: Agent[] = [
     name: "Laura García",
     role: "Customer Success Lead",
     company: "SaaS Solutions",
-    avatar: "",
+    avatar: "https://images.unsplash.com/photo-1649972904349-6e44c42644a7",
     scenario: "Laura está evaluando nuevas herramientas para su equipo de soporte. Busca mejorar los tiempos de respuesta y la satisfacción del cliente.",
     initials: "LG"
   }
