@@ -1,13 +1,14 @@
 import { Home, Phone, Trophy, Settings, Menu } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { Link } from "react-router-dom";
 
 export const Sidebar = () => {
   const [collapsed, setCollapsed] = useState(false);
 
   const menuItems = [
     { icon: Home, label: "Dashboard", path: "/" },
-    { icon: Phone, label: "Llamadas", path: "/calls" },
+    { icon: Phone, label: "Llamadas", path: "/calls/start" },
     { icon: Trophy, label: "Progreso", path: "/progress" },
     { icon: Settings, label: "Ajustes", path: "/settings" },
   ];
@@ -30,14 +31,14 @@ export const Sidebar = () => {
       </div>
       <nav className="p-4">
         {menuItems.map((item) => (
-          <a
+          <Link
             key={item.path}
-            href={item.path}
+            to={item.path}
             className="flex items-center gap-4 p-3 hover:bg-accent rounded-lg mb-2 text-gray-700 hover:text-primary transition-colors"
           >
             <item.icon size={20} />
             {!collapsed && <span>{item.label}</span>}
-          </a>
+          </Link>
         ))}
       </nav>
     </div>
