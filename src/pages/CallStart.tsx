@@ -171,8 +171,8 @@ const CallStart = () => {
         await ringToneRef.current.play().catch(console.error);
       }
 
-      // Construct WebSocket URL with API key and agent ID
-      const wsUrl = `wss://api.elevenlabs.io/v1/chat?xi-api-key=${apiKey}&agent_id=${selectedAgent.elevenlabs_agent_id}`;
+      // Construct WebSocket URL with API key and agent ID - Using v2 endpoint
+      const wsUrl = `wss://api.elevenlabs.io/v2/chat?xi-api-key=${apiKey}&agent_id=${selectedAgent.elevenlabs_agent_id}`;
       
       console.log('Connecting to WebSocket URL:', wsUrl);
       
@@ -181,7 +181,7 @@ const CallStart = () => {
       
       // Set up WebSocket event handlers
       wsRef.current.onopen = () => {
-        console.log("WebSocket connected");
+        console.log("WebSocket connected successfully");
         setIsCallActive(true);
         // Stop ringtone when connection is established
         if (ringToneRef.current) {
@@ -202,7 +202,7 @@ const CallStart = () => {
       wsRef.current.onmessage = (event) => {
         try {
           const response = JSON.parse(event.data);
-          console.log("Received message:", response);
+          console.log("Received message from ElevenLabs:", response);
           
           // Update speaking state based on message type
           if (response.type === 'speech_started') {
@@ -211,7 +211,7 @@ const CallStart = () => {
             setIsSpeaking('user');
           }
         } catch (error) {
-          console.error("Error parsing message:", error);
+          console.error("Error parsing WebSocket message:", error);
         }
       };
 
@@ -226,7 +226,7 @@ const CallStart = () => {
       };
 
       wsRef.current.onclose = () => {
-        console.log("WebSocket closed");
+        console.log("WebSocket connection closed");
         setIsCallActive(false);
         setIsSpeaking(null);
         if (durationIntervalRef.current) {
