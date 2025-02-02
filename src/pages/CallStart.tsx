@@ -7,6 +7,7 @@ import { Phone, Video, Settings, ArrowLeft, Mic, MicOff } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
 
 interface Agent {
   id: string;
@@ -68,20 +69,48 @@ const CallStart = () => {
   const [isMuted, setIsMuted] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
   const [isSpeaking, setIsSpeaking] = useState<'user' | 'agent' | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const durationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   // Audio elements for call sounds
   const ringToneRef = useRef<HTMLAudioElement | null>(null);
   const hangupToneRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
+    // Check authentication status
+    const checkAuth = async () => {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error || !session) {
+        toast({
+          title: "Error de autenticación",
+          description: "Por favor, inicia sesión para continuar",
+          variant: "destructive",
+        });
+        navigate("/auth");
+        return;
+      }
+      setIsAuthenticated(true);
+    };
+
+    checkAuth();
+
+    // Set up auth state change listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        setIsAuthenticated(false);
+        navigate("/auth");
+      }
+    });
+
     // Create audio elements
     ringToneRef.current = new Audio('/sounds/ringtone.mp3');
     hangupToneRef.current = new Audio('/sounds/hangup.mp3');
     
     return () => {
+      subscription.unsubscribe();
       if (wsRef.current) {
         wsRef.current.close();
       }
@@ -89,7 +118,7 @@ const CallStart = () => {
         clearInterval(durationIntervalRef.current);
       }
     };
-  }, []);
+  }, [navigate, toast]);
 
   const formatDuration = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
@@ -108,33 +137,33 @@ const CallStart = () => {
     }
 
     try {
-      // Get the session first
+      // Get the current session
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
       if (sessionError || !session) {
-        console.error("Session error:", sessionError);
         toast({
           title: "Error de autenticación",
           description: "Por favor, inicia sesión para realizar llamadas.",
           variant: "destructive",
         });
+        navigate("/auth");
         return;
       }
 
       // Play ringtone
       if (ringToneRef.current) {
         ringToneRef.current.loop = true;
-        ringToneRef.current.play();
+        await ringToneRef.current.play().catch(console.error);
       }
 
-      // Construct the WebSocket URL with the agent ID
+      // Get the base URL for the WebSocket connection
       const baseUrl = import.meta.env.VITE_SUPABASE_URL;
       const wsUrl = `${baseUrl}/functions/v1/chat?agentId=${selectedAgent.elevenlabs_agent_id}`;
       const wsUrlWithProtocol = wsUrl.replace('https://', 'wss://');
       
       console.log('Connecting to WebSocket URL:', wsUrlWithProtocol);
       
-      // Create WebSocket connection
+      // Create WebSocket connection with auth header
       wsRef.current = new WebSocket(wsUrlWithProtocol);
       
       // Set up WebSocket event handlers
@@ -208,7 +237,7 @@ const CallStart = () => {
   const endCall = () => {
     // Play hangup sound
     if (hangupToneRef.current) {
-      hangupToneRef.current.play();
+      hangupToneRef.current.play().catch(console.error);
     }
     
     if (wsRef.current) {
@@ -228,6 +257,10 @@ const CallStart = () => {
     setIsMuted(!isMuted);
     // Implement microphone muting logic here
   };
+
+  if (!isAuthenticated) {
+    return null; // O un componente de carga
+  }
 
   return (
     <div className="flex h-screen bg-accent">
