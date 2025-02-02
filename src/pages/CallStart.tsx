@@ -151,9 +151,9 @@ const CallStart = () => {
       }
 
       // Get ElevenLabs API key from Supabase
-      const { data: { secret: apiKey }, error } = await supabase.rpc('get_elevenlabs_key');
+      const { data, error } = await supabase.rpc('get_elevenlabs_key');
       
-      if (error || !apiKey) {
+      if (error || !data || data.length === 0) {
         console.error('Error getting API key:', error);
         toast({
           title: "Error",
@@ -162,6 +162,8 @@ const CallStart = () => {
         });
         return;
       }
+
+      const apiKey = data[0].secret;
 
       // Play ringtone
       if (ringToneRef.current) {
