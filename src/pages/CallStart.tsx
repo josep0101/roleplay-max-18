@@ -69,7 +69,7 @@ const CallStart = () => {
   const [callDuration, setCallDuration] = useState(0);
   const [isSpeaking, setIsSpeaking] = useState<'user' | 'agent' | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
-  const durationIntervalRef = useRef<number | null>(null);
+  const durationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
 
   // Audio elements for call sounds
