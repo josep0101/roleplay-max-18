@@ -150,21 +150,32 @@ const CallStart = () => {
         return;
       }
 
+      // Get ElevenLabs API key from Supabase
+      const { data: { secret: apiKey }, error } = await supabase.rpc('get_elevenlabs_key');
+      
+      if (error || !apiKey) {
+        console.error('Error getting API key:', error);
+        toast({
+          title: "Error",
+          description: "No se pudo obtener la clave de API necesaria.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       // Play ringtone
       if (ringToneRef.current) {
         ringToneRef.current.loop = true;
         await ringToneRef.current.play().catch(console.error);
       }
 
-      // Get the base URL for the WebSocket connection
-      const baseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const wsUrl = `${baseUrl}/functions/v1/chat?agentId=${selectedAgent.elevenlabs_agent_id}`;
-      const wsUrlWithProtocol = wsUrl.replace('https://', 'wss://');
+      // Construct WebSocket URL with API key and agent ID
+      const wsUrl = `wss://api.elevenlabs.io/v1/chat?xi-api-key=${apiKey}&agent_id=${selectedAgent.elevenlabs_agent_id}`;
       
-      console.log('Connecting to WebSocket URL:', wsUrlWithProtocol);
+      console.log('Connecting to WebSocket URL:', wsUrl);
       
-      // Create WebSocket connection with auth header
-      wsRef.current = new WebSocket(wsUrlWithProtocol);
+      // Create WebSocket connection
+      wsRef.current = new WebSocket(wsUrl);
       
       // Set up WebSocket event handlers
       wsRef.current.onopen = () => {
