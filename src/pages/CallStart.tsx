@@ -6,7 +6,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { Phone, Video, Settings, ArrowLeft, Mic, MicOff } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 
 interface Agent {
   id: string;
@@ -66,16 +66,36 @@ const CallStart = () => {
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [isCallActive, setIsCallActive] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [callDuration, setCallDuration] = useState(0);
+  const [isSpeaking, setIsSpeaking] = useState<'user' | 'agent' | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const durationIntervalRef = useRef<number | null>(null);
   const { toast } = useToast();
 
+  // Audio elements for call sounds
+  const ringToneRef = useRef<HTMLAudioElement | null>(null);
+  const hangupToneRef = useRef<HTMLAudioElement | null>(null);
+
   useEffect(() => {
+    // Create audio elements
+    ringToneRef.current = new Audio('/sounds/ringtone.mp3');
+    hangupToneRef.current = new Audio('/sounds/hangup.mp3');
+    
     return () => {
       if (wsRef.current) {
         wsRef.current.close();
       }
+      if (durationIntervalRef.current) {
+        clearInterval(durationIntervalRef.current);
+      }
     };
   }, []);
+
+  const formatDuration = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
 
   const startCall = async () => {
     if (!selectedAgent?.elevenlabs_agent_id) {
@@ -101,6 +121,12 @@ const CallStart = () => {
         return;
       }
 
+      // Play ringtone
+      if (ringToneRef.current) {
+        ringToneRef.current.loop = true;
+        ringToneRef.current.play();
+      }
+
       // Construct the WebSocket URL with the agent ID
       const baseUrl = import.meta.env.VITE_SUPABASE_URL;
       const wsUrl = `${baseUrl}/functions/v1/chat?agentId=${selectedAgent.elevenlabs_agent_id}`;
@@ -115,6 +141,16 @@ const CallStart = () => {
       wsRef.current.onopen = () => {
         console.log("WebSocket connected");
         setIsCallActive(true);
+        // Stop ringtone when connection is established
+        if (ringToneRef.current) {
+          ringToneRef.current.pause();
+          ringToneRef.current.currentTime = 0;
+        }
+        // Start call duration timer
+        durationIntervalRef.current = setInterval(() => {
+          setCallDuration(prev => prev + 1);
+        }, 1000);
+        
         toast({
           title: "Llamada iniciada",
           description: `Conectado con ${selectedAgent.name}`,
@@ -125,7 +161,13 @@ const CallStart = () => {
         try {
           const response = JSON.parse(event.data);
           console.log("Received message:", response);
-          // Handle the response from the agent
+          
+          // Update speaking state based on message type
+          if (response.type === 'speech_started') {
+            setIsSpeaking('agent');
+          } else if (response.type === 'speech_ended') {
+            setIsSpeaking('user');
+          }
         } catch (error) {
           console.error("Error parsing message:", error);
         }
@@ -144,6 +186,10 @@ const CallStart = () => {
       wsRef.current.onclose = () => {
         console.log("WebSocket closed");
         setIsCallActive(false);
+        setIsSpeaking(null);
+        if (durationIntervalRef.current) {
+          clearInterval(durationIntervalRef.current);
+        }
         toast({
           title: "Llamada finalizada",
           description: "La conexión ha sido cerrada",
@@ -160,9 +206,21 @@ const CallStart = () => {
   };
 
   const endCall = () => {
+    // Play hangup sound
+    if (hangupToneRef.current) {
+      hangupToneRef.current.play();
+    }
+    
     if (wsRef.current) {
       wsRef.current.close();
-      setIsCallActive(false);
+    }
+    
+    setIsCallActive(false);
+    setIsSpeaking(null);
+    setCallDuration(0);
+    
+    if (durationIntervalRef.current) {
+      clearInterval(durationIntervalRef.current);
     }
   };
 
@@ -170,8 +228,6 @@ const CallStart = () => {
     setIsMuted(!isMuted);
     // Implement microphone muting logic here
   };
-
-  // ... keep existing code (JSX rendering)
 
   return (
     <div className="flex h-screen bg-accent">
@@ -208,10 +264,15 @@ const CallStart = () => {
               <CardContent className="p-8">
                 <div className="flex flex-col items-center gap-6">
                   <div className="relative">
-                    <Avatar className="w-32 h-32">
+                    <Avatar className={`w-32 h-32 transition-all ${
+                      isSpeaking === 'agent' ? 'ring-4 ring-blue-500' :
+                      isSpeaking === 'user' ? 'ring-4 ring-green-500' : ''
+                    }`}>
                       <AvatarFallback className="text-2xl">{selectedAgent.initials}</AvatarFallback>
                     </Avatar>
-                    <span className="absolute bottom-2 right-2 w-4 h-4 bg-green-500 rounded-full border-2 border-white" />
+                    <span className={`absolute bottom-2 right-2 w-4 h-4 ${
+                      isCallActive ? 'bg-green-500' : 'bg-gray-400'
+                    } rounded-full border-2 border-white`} />
                   </div>
 
                   <div className="text-center">
@@ -219,6 +280,11 @@ const CallStart = () => {
                     <p className="text-muted-foreground">
                       {selectedAgent.role} @ {selectedAgent.company}
                     </p>
+                    {isCallActive && (
+                      <p className="text-sm text-muted-foreground mt-2">
+                        Duración: {formatDuration(callDuration)}
+                      </p>
+                    )}
                   </div>
 
                   <div className="bg-white/80 rounded-lg p-6 w-full max-w-2xl">

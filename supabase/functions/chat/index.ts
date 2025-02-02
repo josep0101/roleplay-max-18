@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const ELEVENLABS_WS_URL = "wss://api.elevenlabs.io/v2/chat"
 const corsHeaders = {
@@ -35,7 +36,12 @@ serve(async (req) => {
     }
 
     // Get ElevenLabs API key from Supabase
-    const { data: { secret: apiKey }, error } = await supabase.rpc('get_elevenlabs_key')
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
+
+    const { data: { secret: apiKey }, error } = await supabaseClient.rpc('get_elevenlabs_key')
     
     if (error || !apiKey) {
       console.error('Error getting API key:', error)
@@ -48,7 +54,7 @@ serve(async (req) => {
     // Upgrade the connection to WebSocket
     const { socket: clientSocket, response } = Deno.upgradeWebSocket(req)
     
-    // Connect to ElevenLabs WebSocket
+    // Connect to ElevenLabs WebSocket with API key
     const elevenlabsSocket = new WebSocket(`${ELEVENLABS_WS_URL}?xi-api-key=${apiKey}`)
 
     // Handle connection open
