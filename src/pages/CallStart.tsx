@@ -72,6 +72,7 @@ const CallStart = () => {
   const [isSpeaking, setIsSpeaking] = useState<'user' | 'agent' | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
+  const [hasMicrophonePermission, setHasMicrophonePermission] = useState(false);
   const durationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -108,6 +109,7 @@ const CallStart = () => {
         description: "Ha ocurrido un error en la conexión",
         variant: "destructive",
       });
+      endCall();
     }
   });
 
@@ -125,7 +127,6 @@ const CallStart = () => {
       }
       setIsAuthenticated(true);
       
-      // Fetch user profile
       const { data: profile } = await supabase
         .from('profiles')
         .select('*')
@@ -147,10 +148,20 @@ const CallStart = () => {
     };
   }, [navigate, toast]);
 
-  const formatDuration = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  const requestMicrophonePermission = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      setHasMicrophonePermission(true);
+      return stream;
+    } catch (error) {
+      console.error("Error requesting microphone permission:", error);
+      toast({
+        title: "Error de micrófono",
+        description: "No se pudo acceder al micrófono. Por favor, permite el acceso para continuar.",
+        variant: "destructive",
+      });
+      return null;
+    }
   };
 
   const startCall = async () => {
@@ -164,9 +175,10 @@ const CallStart = () => {
     }
 
     try {
-      // Request microphone permissions
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
+      // First request microphone permissions
+      const stream = await requestMicrophonePermission();
+      if (!stream) return;
+
       // Get signed WebSocket URL from our Edge Function
       const { data: urlData, error: urlError } = await supabase.functions.invoke('get_elevenlabs_url', {
         body: { agent_id: selectedAgent.elevenlabs_agent_id }
@@ -183,12 +195,22 @@ const CallStart = () => {
       }
 
       console.log('Starting conversation with URL:', urlData.url);
-      await conversation.startSession({ url: urlData.url });
       
-      toast({
-        title: "Llamada iniciada",
-        description: `Conectado con ${selectedAgent.name}`,
-      });
+      // Initialize WebSocket connection with proper error handling
+      try {
+        await conversation.startSession({ url: urlData.url });
+        toast({
+          title: "Llamada iniciada",
+          description: `Conectado con ${selectedAgent.name}`,
+        });
+      } catch (wsError) {
+        console.error("WebSocket connection error:", wsError);
+        toast({
+          title: "Error de conexión",
+          description: "No se pudo establecer la conexión. Por favor, intenta de nuevo.",
+          variant: "destructive",
+        });
+      }
 
     } catch (error) {
       console.error("Error starting call:", error);
@@ -217,6 +239,12 @@ const CallStart = () => {
     if (conversation) {
       conversation.setVolume({ volume: isMuted ? 1 : 0 });
     }
+  };
+
+  const formatDuration = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
   if (!isAuthenticated) {
