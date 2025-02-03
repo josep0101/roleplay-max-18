@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { corsHeaders } from "../_shared/cors.ts"
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -35,6 +36,7 @@ serve(async (req) => {
     }
 
     const data = await response.json()
+    console.log('Successfully generated signed URL for agent:', agent_id)
     
     return new Response(
       JSON.stringify({ url: data.signed_url }),
@@ -44,6 +46,7 @@ serve(async (req) => {
       }
     )
   } catch (error) {
+    console.error('Error in get_elevenlabs_url:', error)
     return new Response(
       JSON.stringify({ error: error.message }),
       { 
