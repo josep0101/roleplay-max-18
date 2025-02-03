@@ -20,19 +20,24 @@ serve(async (req) => {
       throw new Error('ElevenLabs API key not configured')
     }
 
-    // Request signed URL from ElevenLabs
+    console.log('Requesting signed URL for agent:', agent_id)
+
+    // Request signed URL from ElevenLabs Conversational AI endpoint
     const response = await fetch(
-      `https://api.elevenlabs.io/v1/convai/conversation/get_signed_url?agent_id=${agent_id}`,
+      `https://api.elevenlabs.io/v1/conversation/get_signed_url?agent_id=${agent_id}`,
       {
         method: "GET",
         headers: {
           "xi-api-key": apiKey,
+          "Content-Type": "application/json",
         },
       }
     )
 
     if (!response.ok) {
-      throw new Error(`ElevenLabs API error: ${await response.text()}`)
+      const errorText = await response.text()
+      console.error('ElevenLabs API error:', errorText)
+      throw new Error(`ElevenLabs API error: ${errorText}`)
     }
 
     const data = await response.json()
