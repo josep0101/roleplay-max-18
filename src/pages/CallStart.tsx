@@ -1,13 +1,14 @@
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sidebar } from "@/components/Sidebar";
-import { Phone, Video, Settings, ArrowLeft, Mic, MicOff } from "lucide-react";
+import { Phone, Video, Settings, ArrowLeft, Mic, MicOff, User } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
+import { useConversation } from "@11labs/react";
 
 interface Agent {
   id: string;
@@ -70,17 +71,47 @@ const CallStart = () => {
   const [callDuration, setCallDuration] = useState(0);
   const [isSpeaking, setIsSpeaking] = useState<'user' | 'agent' | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
+  const [userProfile, setUserProfile] = useState<any>(null);
   const durationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
-
-  // Audio elements for call sounds
-  const ringToneRef = useRef<HTMLAudioElement | null>(null);
-  const hangupToneRef = useRef<HTMLAudioElement | null>(null);
+  
+  const conversation = useConversation({
+    onConnect: () => {
+      console.log("Connected to ElevenLabs WebSocket");
+      setIsCallActive(true);
+      if (durationIntervalRef.current) clearInterval(durationIntervalRef.current);
+      durationIntervalRef.current = setInterval(() => {
+        setCallDuration(prev => prev + 1);
+      }, 1000);
+    },
+    onDisconnect: () => {
+      console.log("Disconnected from ElevenLabs WebSocket");
+      setIsCallActive(false);
+      setIsSpeaking(null);
+      if (durationIntervalRef.current) {
+        clearInterval(durationIntervalRef.current);
+      }
+    },
+    onMessage: (message) => {
+      console.log("Received message:", message);
+      if (message.type === 'speech_started') {
+        setIsSpeaking('agent');
+      } else if (message.type === 'speech_ended') {
+        setIsSpeaking('user');
+      }
+    },
+    onError: (error) => {
+      console.error("ElevenLabs WebSocket error:", error);
+      toast({
+        title: "Error en la llamada",
+        description: "Ha ocurrido un error en la conexión",
+        variant: "destructive",
+      });
+    }
+  });
 
   useEffect(() => {
-    // Check authentication status
     const checkAuth = async () => {
       const { data: { session }, error } = await supabase.auth.getSession();
       if (error || !session) {
@@ -93,29 +124,25 @@ const CallStart = () => {
         return;
       }
       setIsAuthenticated(true);
+      
+      // Fetch user profile
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .single();
+      
+      setUserProfile(profile);
     };
 
     checkAuth();
 
-    // Set up auth state change listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
-        setIsAuthenticated(false);
-        navigate("/auth");
-      }
-    });
-
-    // Create audio elements
-    ringToneRef.current = new Audio('/sounds/ringtone.mp3');
-    hangupToneRef.current = new Audio('/sounds/hangup.mp3');
-    
     return () => {
-      subscription.unsubscribe();
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
       if (durationIntervalRef.current) {
         clearInterval(durationIntervalRef.current);
+      }
+      if (conversation) {
+        conversation.endSession();
       }
     };
   }, [navigate, toast]);
@@ -137,25 +164,9 @@ const CallStart = () => {
     }
 
     try {
-      // Check authentication
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      // Request microphone permissions
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       
-      if (sessionError || !session) {
-        toast({
-          title: "Error de autenticación",
-          description: "Por favor, inicia sesión para realizar llamadas.",
-          variant: "destructive",
-        });
-        navigate("/auth");
-        return;
-      }
-
-      // Play ringtone
-      if (ringToneRef.current) {
-        ringToneRef.current.loop = true;
-        await ringToneRef.current.play().catch(console.error);
-      }
-
       // Get signed WebSocket URL from our Edge Function
       const { data: urlData, error: urlError } = await supabase.functions.invoke('get_elevenlabs_url', {
         body: { agent_id: selectedAgent.elevenlabs_agent_id }
@@ -171,76 +182,13 @@ const CallStart = () => {
         return;
       }
 
-      console.log('Connecting to WebSocket URL:', urlData.url);
+      console.log('Starting conversation with URL:', urlData.url);
+      await conversation.startSession({ url: urlData.url });
       
-      // Create WebSocket connection with signed URL
-      wsRef.current = new WebSocket(urlData.url);
-      
-      wsRef.current.onopen = () => {
-        console.log("WebSocket connected successfully");
-        setIsCallActive(true);
-        if (ringToneRef.current) {
-          ringToneRef.current.pause();
-          ringToneRef.current.currentTime = 0;
-        }
-        durationIntervalRef.current = setInterval(() => {
-          setCallDuration(prev => prev + 1);
-        }, 1000);
-        
-        toast({
-          title: "Llamada iniciada",
-          description: `Conectado con ${selectedAgent.name}`,
-        });
-      };
-
-      wsRef.current.onmessage = (event) => {
-        try {
-          const response = JSON.parse(event.data);
-          console.log("Received message from ElevenLabs:", response);
-          
-          switch (response.type) {
-            case 'speech_started':
-              setIsSpeaking('agent');
-              break;
-            case 'speech_ended':
-              setIsSpeaking('user');
-              break;
-            case 'error':
-              console.error("ElevenLabs error:", response.error);
-              toast({
-                title: "Error en la llamada",
-                description: "Ocurrió un error durante la llamada",
-                variant: "destructive",
-              });
-              break;
-          }
-        } catch (error) {
-          console.error("Error parsing WebSocket message:", error);
-        }
-      };
-
-      wsRef.current.onerror = (error) => {
-        console.error("WebSocket error:", error);
-        toast({
-          title: "Error en la llamada",
-          description: "Ha ocurrido un error en la conexión",
-          variant: "destructive",
-        });
-        endCall();
-      };
-
-      wsRef.current.onclose = () => {
-        console.log("WebSocket connection closed");
-        setIsCallActive(false);
-        setIsSpeaking(null);
-        if (durationIntervalRef.current) {
-          clearInterval(durationIntervalRef.current);
-        }
-        toast({
-          title: "Llamada finalizada",
-          description: "La conexión ha sido cerrada",
-        });
-      };
+      toast({
+        title: "Llamada iniciada",
+        description: `Conectado con ${selectedAgent.name}`,
+      });
 
     } catch (error) {
       console.error("Error starting call:", error);
@@ -253,19 +201,12 @@ const CallStart = () => {
   };
 
   const endCall = () => {
-    // Play hangup sound
-    if (hangupToneRef.current) {
-      hangupToneRef.current.play().catch(console.error);
+    if (conversation) {
+      conversation.endSession();
     }
-    
-    if (wsRef.current) {
-      wsRef.current.close();
-    }
-    
     setIsCallActive(false);
     setIsSpeaking(null);
     setCallDuration(0);
-    
     if (durationIntervalRef.current) {
       clearInterval(durationIntervalRef.current);
     }
@@ -273,11 +214,13 @@ const CallStart = () => {
 
   const toggleMute = () => {
     setIsMuted(!isMuted);
-    // Implement microphone muting logic here
+    if (conversation) {
+      conversation.setVolume({ volume: isMuted ? 1 : 0 });
+    }
   };
 
   if (!isAuthenticated) {
-    return null; // O un componente de carga
+    return null;
   }
 
   return (
@@ -302,7 +245,7 @@ const CallStart = () => {
                 </Button>
               )}
               <h1 className="text-2xl font-semibold">
-                {selectedAgent ? 'Iniciar Llamada' : 'Seleccionar Cliente'}
+                {selectedAgent ? 'Llamada en Curso' : 'Seleccionar Cliente'}
               </h1>
             </div>
             <Button variant="outline" size="icon">
@@ -314,17 +257,51 @@ const CallStart = () => {
             <Card className="bg-white/50 backdrop-blur-sm border-0 shadow-sm">
               <CardContent className="p-8">
                 <div className="flex flex-col items-center gap-6">
-                  <div className="relative">
-                    <Avatar className={`w-32 h-32 transition-all ${
-                      isSpeaking === 'agent' ? 'ring-4 ring-blue-500' :
-                      isSpeaking === 'user' ? 'ring-4 ring-green-500' : ''
-                    }`}>
-                      <AvatarFallback className="text-2xl">{selectedAgent.initials}</AvatarFallback>
-                    </Avatar>
-                    <span className={`absolute bottom-2 right-2 w-4 h-4 ${
-                      isCallActive ? 'bg-green-500' : 'bg-gray-400'
-                    } rounded-full border-2 border-white`} />
-                  </div>
+                  {isCallActive ? (
+                    <div className="flex items-center justify-center gap-16 w-full">
+                      {/* User Avatar */}
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="relative">
+                          <Avatar className={`w-32 h-32 transition-all ${
+                            isSpeaking === 'user' ? 'ring-4 ring-green-500' : ''
+                          }`}>
+                            {userProfile?.avatar_url ? (
+                              <AvatarImage src={userProfile.avatar_url} />
+                            ) : (
+                              <AvatarFallback>
+                                <User className="w-16 h-16 text-gray-400" />
+                              </AvatarFallback>
+                            )}
+                          </Avatar>
+                          <span className="absolute bottom-2 right-2 w-4 h-4 bg-green-500 rounded-full border-2 border-white" />
+                        </div>
+                        <p className="font-medium">Tú</p>
+                      </div>
+
+                      {/* Agent Avatar */}
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="relative">
+                          <Avatar className={`w-32 h-32 transition-all ${
+                            isSpeaking === 'agent' ? 'ring-4 ring-blue-500' : ''
+                          }`}>
+                            <AvatarFallback className="text-2xl bg-blue-100">
+                              {selectedAgent.initials}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="absolute bottom-2 right-2 w-4 h-4 bg-green-500 rounded-full border-2 border-white" />
+                        </div>
+                        <p className="font-medium">{selectedAgent.name}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <Avatar className="w-32 h-32">
+                        <AvatarFallback className="text-2xl">
+                          {selectedAgent.initials}
+                        </AvatarFallback>
+                      </Avatar>
+                    </div>
+                  )}
 
                   <div className="text-center">
                     <h2 className="text-2xl font-semibold mb-1">{selectedAgent.name}</h2>
