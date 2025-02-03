@@ -137,7 +137,7 @@ const CallStart = () => {
     }
 
     try {
-      // Get the current session
+      // Check authentication
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
       if (sessionError || !session) {
@@ -150,45 +150,39 @@ const CallStart = () => {
         return;
       }
 
-      // Get ElevenLabs API key from Supabase
-      const { data, error } = await supabase.rpc('get_elevenlabs_key');
-      
-      if (error || !data || data.length === 0) {
-        console.error('Error getting API key:', error);
-        toast({
-          title: "Error",
-          description: "No se pudo obtener la clave de API necesaria.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const apiKey = data[0].secret;
-
       // Play ringtone
       if (ringToneRef.current) {
         ringToneRef.current.loop = true;
         await ringToneRef.current.play().catch(console.error);
       }
 
-      // Construct WebSocket URL with API key and agent ID - Using v2 endpoint
-      const wsUrl = `wss://api.elevenlabs.io/v2/chat?xi-api-key=${apiKey}&agent_id=${selectedAgent.elevenlabs_agent_id}`;
+      // Get signed WebSocket URL from our Edge Function
+      const { data: urlData, error: urlError } = await supabase.functions.invoke('get_elevenlabs_url', {
+        body: { agent_id: selectedAgent.elevenlabs_agent_id }
+      });
+
+      if (urlError || !urlData?.url) {
+        console.error('Error getting signed URL:', urlError);
+        toast({
+          title: "Error",
+          description: "No se pudo iniciar la llamada. Por favor, intenta de nuevo.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      console.log('Connecting to WebSocket URL:', urlData.url);
       
-      console.log('Connecting to WebSocket URL:', wsUrl);
+      // Create WebSocket connection with signed URL
+      wsRef.current = new WebSocket(urlData.url);
       
-      // Create WebSocket connection
-      wsRef.current = new WebSocket(wsUrl);
-      
-      // Set up WebSocket event handlers
       wsRef.current.onopen = () => {
         console.log("WebSocket connected successfully");
         setIsCallActive(true);
-        // Stop ringtone when connection is established
         if (ringToneRef.current) {
           ringToneRef.current.pause();
           ringToneRef.current.currentTime = 0;
         }
-        // Start call duration timer
         durationIntervalRef.current = setInterval(() => {
           setCallDuration(prev => prev + 1);
         }, 1000);
@@ -204,11 +198,21 @@ const CallStart = () => {
           const response = JSON.parse(event.data);
           console.log("Received message from ElevenLabs:", response);
           
-          // Update speaking state based on message type
-          if (response.type === 'speech_started') {
-            setIsSpeaking('agent');
-          } else if (response.type === 'speech_ended') {
-            setIsSpeaking('user');
+          switch (response.type) {
+            case 'speech_started':
+              setIsSpeaking('agent');
+              break;
+            case 'speech_ended':
+              setIsSpeaking('user');
+              break;
+            case 'error':
+              console.error("ElevenLabs error:", response.error);
+              toast({
+                title: "Error en la llamada",
+                description: "Ocurrió un error durante la llamada",
+                variant: "destructive",
+              });
+              break;
           }
         } catch (error) {
           console.error("Error parsing WebSocket message:", error);
@@ -237,6 +241,7 @@ const CallStart = () => {
           description: "La conexión ha sido cerrada",
         });
       };
+
     } catch (error) {
       console.error("Error starting call:", error);
       toast({
