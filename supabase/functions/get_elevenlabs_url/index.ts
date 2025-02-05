@@ -37,15 +37,32 @@ serve(async (req) => {
       throw new Error('Could not retrieve ElevenLabs API key')
     }
 
+    const apiKey = data[0].secret
+    console.log('Successfully retrieved API key')
     console.log('Requesting signed URL for agent:', agent_id)
 
-    // Using the correct API endpoint for signed URL generation
+    // First, verify the API key is valid
+    const verifyResponse = await fetch('https://api.elevenlabs.io/v2/user', {
+      headers: {
+        'xi-api-key': apiKey,
+      },
+    })
+
+    if (!verifyResponse.ok) {
+      const errorText = await verifyResponse.text()
+      console.error('ElevenLabs API key verification failed:', errorText)
+      throw new Error(`Invalid ElevenLabs API key: ${errorText}`)
+    }
+
+    console.log('API key verified successfully')
+
+    // Now get the signed URL
     const response = await fetch(
       `https://api.elevenlabs.io/v2/conversation/start?agent_id=${agent_id}`,
       {
         method: "GET",
         headers: {
-          "xi-api-key": data[0].secret,
+          "xi-api-key": apiKey,
           "Content-Type": "application/json",
         },
       }
@@ -58,6 +75,12 @@ serve(async (req) => {
     }
 
     const responseData = await response.json()
+    
+    if (!responseData.connection_url) {
+      console.error('Unexpected response format:', responseData)
+      throw new Error('Invalid response format from ElevenLabs API')
+    }
+
     console.log('Successfully generated signed URL for agent:', agent_id)
     
     return new Response(
