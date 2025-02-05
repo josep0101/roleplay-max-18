@@ -28,8 +28,10 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Get ElevenLabs API key using the get_elevenlabs_key function
-    const { data: keyData, error: keyError } = await supabaseAdmin.rpc('get_elevenlabs_key')
+    // Get ElevenLabs API key using the secrets function
+    const { data: keyData, error: keyError } = await supabaseAdmin.rpc('secrets', {
+      secret_name: 'ELEVENLABS_API_KEY'
+    })
     
     if (keyError || !keyData?.secret) {
       console.error('Error getting ElevenLabs API key:', keyError)
