@@ -46,7 +46,7 @@ serve(async (req) => {
     console.log('Requesting signed URL for agent:', agent_id)
 
     // First, verify the API key is valid
-    const verifyResponse = await fetch('https://api.elevenlabs.io/v2/user', {
+    const verifyResponse = await fetch('https://api.elevenlabs.io/v1/user', {
       headers: {
         'xi-api-key': apiKey,
       },
