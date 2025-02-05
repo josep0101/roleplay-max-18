@@ -28,19 +28,15 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Get ElevenLabs API key from vault.decrypted_secrets directly
-    const { data: secrets, error: secretError } = await supabaseAdmin
-      .from('decrypted_secrets')
-      .select('decrypted_secret')
-      .eq('name', 'ELEVENLABS_API_KEY')
-      .single()
+    // Get ElevenLabs API key using the get_elevenlabs_key function
+    const { data: keyData, error: keyError } = await supabaseAdmin.rpc('get_elevenlabs_key')
     
-    if (secretError || !secrets?.decrypted_secret) {
-      console.error('Error getting ElevenLabs API key:', secretError)
+    if (keyError || !keyData?.secret) {
+      console.error('Error getting ElevenLabs API key:', keyError)
       throw new Error('Could not retrieve ElevenLabs API key')
     }
 
-    const apiKey = secrets.decrypted_secret
+    const apiKey = keyData.secret
     console.log('Successfully retrieved API key')
     console.log('Requesting signed URL for agent:', agent_id)
 
