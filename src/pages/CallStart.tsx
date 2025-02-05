@@ -94,7 +94,6 @@ const CallStart = () => {
       if (durationIntervalRef.current) {
         clearInterval(durationIntervalRef.current);
       }
-      // Stop microphone stream when call ends
       if (microphoneStream) {
         microphoneStream.getTracks().forEach(track => track.stop());
         setMicrophoneStream(null);
@@ -140,9 +139,6 @@ const CallStart = () => {
         .single();
       
       setUserProfile(profile);
-
-      // Request microphone permission on component mount
-      requestMicrophonePermission();
     };
 
     checkAuth();
@@ -154,7 +150,6 @@ const CallStart = () => {
       if (conversation) {
         conversation.endSession();
       }
-      // Clean up microphone stream
       if (microphoneStream) {
         microphoneStream.getTracks().forEach(track => track.stop());
       }
@@ -190,6 +185,7 @@ const CallStart = () => {
       return;
     }
 
+    // Request microphone permission if not already granted
     if (!hasMicrophonePermission) {
       const stream = await requestMicrophonePermission();
       if (!stream) return;
@@ -215,21 +211,12 @@ const CallStart = () => {
 
       console.log('Starting conversation with URL:', urlData.url);
       
-      // Initialize WebSocket connection with proper error handling
-      try {
-        await conversation.startSession({ url: urlData.url });
-        toast({
-          title: "Llamada iniciada",
-          description: `Conectado con ${selectedAgent.name}`,
-        });
-      } catch (wsError) {
-        console.error("WebSocket connection error:", wsError);
-        toast({
-          title: "Error de conexión",
-          description: "No se pudo establecer la conexión. Por favor, intenta de nuevo.",
-          variant: "destructive",
-        });
-      }
+      // Initialize WebSocket connection
+      await conversation.startSession({ url: urlData.url });
+      toast({
+        title: "Llamada iniciada",
+        description: `Conectado con ${selectedAgent.name}`,
+      });
 
     } catch (error) {
       console.error("Error starting call:", error);
@@ -251,7 +238,6 @@ const CallStart = () => {
     if (durationIntervalRef.current) {
       clearInterval(durationIntervalRef.current);
     }
-    // Stop microphone stream when call ends
     if (microphoneStream) {
       microphoneStream.getTracks().forEach(track => track.stop());
       setMicrophoneStream(null);
