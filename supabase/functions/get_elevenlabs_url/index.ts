@@ -27,10 +27,12 @@ serve(async (req) => {
       }
     )
 
-    // Get ElevenLabs API key from Supabase secrets
-    const { data, error: secretError } = await supabaseClient.rpc('get_elevenlabs_key')
+    // Get ElevenLabs API key using the secrets function
+    const { data, error: secretError } = await supabaseClient.rpc('secrets', {
+      secret_name: 'ELEVENLABS_API_KEY'
+    })
     
-    if (secretError || !data?.secret) {
+    if (secretError || !data?.[0]?.secret) {
       console.error('Error getting ElevenLabs API key:', secretError)
       throw new Error('Could not retrieve ElevenLabs API key')
     }
@@ -42,7 +44,7 @@ serve(async (req) => {
       {
         method: "GET",
         headers: {
-          "xi-api-key": data.secret,
+          "xi-api-key": data[0].secret,
           "Content-Type": "application/json",
         },
       }
