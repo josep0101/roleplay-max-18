@@ -28,21 +28,24 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Get ElevenLabs API key using the secrets function
-    const { data: keyData, error: keyError } = await supabaseAdmin.rpc('secrets', {
-      secret_name: 'ELEVENLABS_API_KEY'
-    })
+    // Get ElevenLabs API key using the get_elevenlabs_key function
+    const { data: keyData, error: keyError } = await supabaseAdmin.rpc('get_elevenlabs_key')
     
-    if (keyError || !keyData?.secret) {
+    if (keyError) {
       console.error('Error getting ElevenLabs API key:', keyError)
       throw new Error('Could not retrieve ElevenLabs API key')
+    }
+
+    if (!keyData?.secret) {
+      console.error('No API key found in response:', keyData)
+      throw new Error('ElevenLabs API key not found')
     }
 
     const apiKey = keyData.secret
     console.log('Successfully retrieved API key')
     console.log('Requesting signed URL for agent:', agent_id)
 
-    // Get the signed URL using the correct endpoint
+    // Get the signed URL from ElevenLabs
     const response = await fetch(
       `https://api.elevenlabs.io/v2/conversation/start?agent_id=${agent_id}`,
       {
@@ -57,7 +60,7 @@ serve(async (req) => {
     if (!response.ok) {
       const errorText = await response.text()
       console.error('ElevenLabs API error response:', errorText)
-      throw new Error(`ElevenLabs API error: ${errorText}`)
+      throw new Error(`ElevenLabs API error: ${response.status} - ${errorText}`)
     }
 
     const responseData = await response.json()
