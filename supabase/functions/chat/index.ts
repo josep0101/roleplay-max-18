@@ -17,6 +17,7 @@ serve(async (req) => {
   const upgradeHeader = headers.get("upgrade") || ""
 
   if (upgradeHeader.toLowerCase() !== "websocket") {
+    console.error("Expected WebSocket connection")
     return new Response("Expected WebSocket connection", { 
       status: 400,
       headers: corsHeaders
@@ -29,6 +30,7 @@ serve(async (req) => {
     const agentId = url.searchParams.get('agentId')
     
     if (!agentId) {
+      console.error("Missing agent ID")
       return new Response("Agent ID is required", { 
         status: 400,
         headers: corsHeaders
@@ -51,6 +53,8 @@ serve(async (req) => {
       })
     }
 
+    console.log("Upgrading connection to WebSocket")
+    
     // Upgrade the connection to WebSocket
     const { socket: clientSocket, response } = Deno.upgradeWebSocket(req)
     
@@ -64,7 +68,7 @@ serve(async (req) => {
       elevenlabsSocket.send(JSON.stringify({
         text: "",
         model_id: agentId,
-        debug: false
+        debug: true
       }))
     }
 

@@ -1,1 +1,7 @@
 project_id = "cjydgoiiyyaofeuqtbrp"
+
+[functions.get_elevenlabs_url]
+verify_jwt = true
+
+[functions.chat]
+verify_jwt = true

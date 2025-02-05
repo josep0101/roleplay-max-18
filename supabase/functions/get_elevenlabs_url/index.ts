@@ -15,11 +15,12 @@ serve(async (req) => {
       throw new Error('Agent ID is required')
     }
 
-    // Get ElevenLabs API key from secrets
-    const apiKey = Deno.env.get('ELEVENLABS_API_KEY')
-    if (!apiKey) {
-      console.error('ElevenLabs API key not configured')
-      throw new Error('ElevenLabs API key not configured')
+    // Get ElevenLabs API key from Supabase secrets
+    const { data: { secret: apiKey }, error: secretError } = await supabaseClient.rpc('get_elevenlabs_key')
+    
+    if (secretError || !apiKey) {
+      console.error('Error getting ElevenLabs API key:', secretError)
+      throw new Error('Could not retrieve ElevenLabs API key')
     }
 
     console.log('Requesting signed URL for agent:', agent_id)
@@ -35,14 +36,13 @@ serve(async (req) => {
       }
     )
 
-    const responseText = await response.text()
-    console.log('ElevenLabs API response:', responseText)
-
     if (!response.ok) {
-      throw new Error(`ElevenLabs API error: ${responseText}`)
+      const errorText = await response.text()
+      console.error('ElevenLabs API error response:', errorText)
+      throw new Error(`ElevenLabs API error: ${errorText}`)
     }
 
-    const data = JSON.parse(responseText)
+    const data = await response.json()
     console.log('Successfully generated signed URL for agent:', agent_id)
     
     return new Response(
