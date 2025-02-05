@@ -11,18 +11,19 @@ serve(async (req) => {
     const { agent_id } = await req.json()
     
     if (!agent_id) {
+      console.error('Missing agent_id in request')
       throw new Error('Agent ID is required')
     }
 
     // Get ElevenLabs API key from secrets
     const apiKey = Deno.env.get('ELEVENLABS_API_KEY')
     if (!apiKey) {
+      console.error('ElevenLabs API key not configured')
       throw new Error('ElevenLabs API key not configured')
     }
 
     console.log('Requesting signed URL for agent:', agent_id)
 
-    // Request signed URL from ElevenLabs Conversational AI endpoint
     const response = await fetch(
       `https://api.elevenlabs.io/v1/conversation/get_signed_url?agent_id=${agent_id}`,
       {
@@ -34,13 +35,14 @@ serve(async (req) => {
       }
     )
 
+    const responseText = await response.text()
+    console.log('ElevenLabs API response:', responseText)
+
     if (!response.ok) {
-      const errorText = await response.text()
-      console.error('ElevenLabs API error:', errorText)
-      throw new Error(`ElevenLabs API error: ${errorText}`)
+      throw new Error(`ElevenLabs API error: ${responseText}`)
     }
 
-    const data = await response.json()
+    const data = JSON.parse(responseText)
     console.log('Successfully generated signed URL for agent:', agent_id)
     
     return new Response(

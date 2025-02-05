@@ -73,6 +73,7 @@ const CallStart = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [hasMicrophonePermission, setHasMicrophonePermission] = useState(false);
+  const [microphoneStream, setMicrophoneStream] = useState<MediaStream | null>(null);
   const durationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -92,6 +93,11 @@ const CallStart = () => {
       setIsSpeaking(null);
       if (durationIntervalRef.current) {
         clearInterval(durationIntervalRef.current);
+      }
+      // Stop microphone stream when call ends
+      if (microphoneStream) {
+        microphoneStream.getTracks().forEach(track => track.stop());
+        setMicrophoneStream(null);
       }
     },
     onMessage: (message) => {
@@ -134,6 +140,9 @@ const CallStart = () => {
         .single();
       
       setUserProfile(profile);
+
+      // Request microphone permission on component mount
+      requestMicrophonePermission();
     };
 
     checkAuth();
@@ -145,13 +154,20 @@ const CallStart = () => {
       if (conversation) {
         conversation.endSession();
       }
+      // Clean up microphone stream
+      if (microphoneStream) {
+        microphoneStream.getTracks().forEach(track => track.stop());
+      }
     };
   }, [navigate, toast]);
 
   const requestMicrophonePermission = async () => {
     try {
+      console.log("Requesting microphone permission...");
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.log("Microphone permission granted");
       setHasMicrophonePermission(true);
+      setMicrophoneStream(stream);
       return stream;
     } catch (error) {
       console.error("Error requesting microphone permission:", error);
@@ -174,11 +190,14 @@ const CallStart = () => {
       return;
     }
 
-    try {
-      // First request microphone permissions
+    if (!hasMicrophonePermission) {
       const stream = await requestMicrophonePermission();
       if (!stream) return;
+    }
 
+    try {
+      console.log("Getting signed WebSocket URL for agent:", selectedAgent.elevenlabs_agent_id);
+      
       // Get signed WebSocket URL from our Edge Function
       const { data: urlData, error: urlError } = await supabase.functions.invoke('get_elevenlabs_url', {
         body: { agent_id: selectedAgent.elevenlabs_agent_id }
@@ -232,13 +251,20 @@ const CallStart = () => {
     if (durationIntervalRef.current) {
       clearInterval(durationIntervalRef.current);
     }
+    // Stop microphone stream when call ends
+    if (microphoneStream) {
+      microphoneStream.getTracks().forEach(track => track.stop());
+      setMicrophoneStream(null);
+    }
   };
 
   const toggleMute = () => {
-    setIsMuted(!isMuted);
-    if (conversation) {
-      conversation.setVolume({ volume: isMuted ? 1 : 0 });
+    if (microphoneStream) {
+      microphoneStream.getAudioTracks().forEach(track => {
+        track.enabled = isMuted;
+      });
     }
+    setIsMuted(!isMuted);
   };
 
   const formatDuration = (seconds: number) => {
