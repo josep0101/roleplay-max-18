@@ -39,8 +39,9 @@ serve(async (req) => {
 
     console.log('Requesting signed URL for agent:', agent_id)
 
+    // Using the correct API endpoint for signed URL generation
     const response = await fetch(
-      `https://api.elevenlabs.io/v1/conversation/get_signed_url?agent_id=${agent_id}`,
+      `https://api.elevenlabs.io/v2/conversation/start?agent_id=${agent_id}`,
       {
         method: "GET",
         headers: {
@@ -60,7 +61,7 @@ serve(async (req) => {
     console.log('Successfully generated signed URL for agent:', agent_id)
     
     return new Response(
-      JSON.stringify({ url: responseData.signed_url }),
+      JSON.stringify({ url: responseData.connection_url }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200 
