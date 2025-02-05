@@ -22,19 +22,16 @@ serve(async (req) => {
 
     console.log('Processing request for agent:', agent_id)
 
-    // Initialize Supabase client
-    const supabaseClient = createClient(
+    // Initialize Supabase client with service role key
+    const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-      {
-        auth: {
-          persistSession: false
-        }
-      }
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Get ElevenLabs API key
-    const { data: { secret: apiKey }, error: secretError } = await supabaseClient.rpc('get_elevenlabs_key')
+    // Get ElevenLabs API key using the secrets function
+    const { data: { secret: apiKey }, error: secretError } = await supabaseAdmin.rpc('secrets', {
+      secret_name: 'ELEVENLABS_API_KEY'
+    })
     
     if (secretError || !apiKey) {
       console.error('Error getting ElevenLabs API key:', secretError)
