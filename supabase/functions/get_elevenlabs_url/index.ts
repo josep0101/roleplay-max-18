@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from "../_shared/cors.ts"
 
 serve(async (req) => {
@@ -15,10 +16,21 @@ serve(async (req) => {
       throw new Error('Agent ID is required')
     }
 
+    // Initialize Supabase client with service role key
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      {
+        auth: {
+          persistSession: false
+        }
+      }
+    )
+
     // Get ElevenLabs API key from Supabase secrets
-    const { data: { secret: apiKey }, error: secretError } = await supabaseClient.rpc('get_elevenlabs_key')
+    const { data, error: secretError } = await supabaseClient.rpc('get_elevenlabs_key')
     
-    if (secretError || !apiKey) {
+    if (secretError || !data?.secret) {
       console.error('Error getting ElevenLabs API key:', secretError)
       throw new Error('Could not retrieve ElevenLabs API key')
     }
@@ -30,7 +42,7 @@ serve(async (req) => {
       {
         method: "GET",
         headers: {
-          "xi-api-key": apiKey,
+          "xi-api-key": data.secret,
           "Content-Type": "application/json",
         },
       }
@@ -42,11 +54,11 @@ serve(async (req) => {
       throw new Error(`ElevenLabs API error: ${errorText}`)
     }
 
-    const data = await response.json()
+    const responseData = await response.json()
     console.log('Successfully generated signed URL for agent:', agent_id)
     
     return new Response(
-      JSON.stringify({ url: data.signed_url }),
+      JSON.stringify({ url: responseData.signed_url }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200 
