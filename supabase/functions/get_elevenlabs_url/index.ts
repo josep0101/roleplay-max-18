@@ -20,7 +20,9 @@ serve(async (req) => {
       throw new Error('Agent ID is required')
     }
 
-    // Initialize Supabase client with service role key
+    console.log('Processing request for agent:', agent_id)
+
+    // Initialize Supabase client
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
@@ -31,36 +33,18 @@ serve(async (req) => {
       }
     )
 
-    // Get ElevenLabs API key using the secrets function
-    const { data, error: secretError } = await supabaseClient.rpc('secrets', {
-      secret_name: 'ELEVENLABS_API_KEY'
-    })
+    // Get ElevenLabs API key
+    const { data: { secret: apiKey }, error: secretError } = await supabaseClient.rpc('get_elevenlabs_key')
     
-    if (secretError || !data?.[0]?.secret) {
+    if (secretError || !apiKey) {
       console.error('Error getting ElevenLabs API key:', secretError)
       throw new Error('Could not retrieve ElevenLabs API key')
     }
 
-    const apiKey = data[0].secret
     console.log('Successfully retrieved API key')
     console.log('Requesting signed URL for agent:', agent_id)
 
-    // First, verify the API key is valid
-    const verifyResponse = await fetch('https://api.elevenlabs.io/v1/user', {
-      headers: {
-        'xi-api-key': apiKey,
-      },
-    })
-
-    if (!verifyResponse.ok) {
-      const errorText = await verifyResponse.text()
-      console.error('ElevenLabs API key verification failed:', errorText)
-      throw new Error(`Invalid ElevenLabs API key: ${errorText}`)
-    }
-
-    console.log('API key verified successfully')
-
-    // Now get the signed URL using the correct endpoint
+    // Get the signed URL using the correct endpoint
     const response = await fetch(
       `https://api.elevenlabs.io/v2/conversation/start?agent_id=${agent_id}`,
       {
